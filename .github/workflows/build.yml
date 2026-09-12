@@ -104,12 +104,15 @@ jobs:
 
                   ServerTickEvents.END_SERVER_TICK.register(server -> {
 
-                      for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+                      for (ServerPlayerEntity player :
+                              server.getPlayerManager().getPlayerList()) {
 
                           boolean active = isLampiao(player);
-                          boolean previous = states.getOrDefault(player.getUuid(), false);
+                          boolean previous =
+                                  states.getOrDefault(player.getUuid(), false);
 
                           if (active != previous) {
+
                               states.put(player.getUuid(), active);
 
                               if (active) {
@@ -130,7 +133,8 @@ jobs:
 
               private boolean hasLampiao(ItemStack stack) {
 
-                  if (stack.isEmpty() || !stack.isOf(Items.SOUL_LANTERN)) {
+                  if (stack.isEmpty() ||
+                          !stack.isOf(Items.SOUL_LANTERN)) {
                       return false;
                   }
 
@@ -150,21 +154,39 @@ jobs:
                       MinecraftServer server,
                       ServerPlayerEntity player) {
 
-                  List<EquipmentSlot> slots = List.of(
-                          EquipmentSlot.MAINHAND,
-                          EquipmentSlot.OFFHAND,
-                          EquipmentSlot.HEAD,
-                          EquipmentSlot.CHEST,
-                          EquipmentSlot.LEGS,
-                          EquipmentSlot.FEET
-                  );
+                  List<Pair<EquipmentSlot, ItemStack>> equipment =
+                          new ArrayList<>();
+
+                  for (EquipmentSlot slot : getSlots()) {
+                      equipment.add(Pair.of(slot, ItemStack.EMPTY));
+                  }
+
+                  sendEquipment(server, player, equipment);
+              }
+
+              private void showToOthers(
+                      MinecraftServer server,
+                      ServerPlayerEntity player) {
 
                   List<Pair<EquipmentSlot, ItemStack>> equipment =
                           new ArrayList<>();
 
-                  for (EquipmentSlot slot : slots) {
-                      equipment.add(Pair.of(slot, ItemStack.EMPTY));
+                  for (EquipmentSlot slot : getSlots()) {
+                      equipment.add(
+                              Pair.of(
+                                      slot,
+                                      player.getEquippedStack(slot).copy()
+                              )
+                      );
                   }
+
+                  sendEquipment(server, player, equipment);
+              }
+
+              private void sendEquipment(
+                      MinecraftServer server,
+                      ServerPlayerEntity player,
+                      List<Pair<EquipmentSlot, ItemStack>> equipment) {
 
                   EntityEquipmentUpdateS2CPacket packet =
                           new EntityEquipmentUpdateS2CPacket(
@@ -181,11 +203,9 @@ jobs:
                   }
               }
 
-              private void showToOthers(
-                      MinecraftServer server,
-                      ServerPlayerEntity player) {
+              private List<EquipmentSlot> getSlots() {
 
-                  List<EquipmentSlot> slots = List.of(
+                  return List.of(
                           EquipmentSlot.MAINHAND,
                           EquipmentSlot.OFFHAND,
                           EquipmentSlot.HEAD,
@@ -193,32 +213,6 @@ jobs:
                           EquipmentSlot.LEGS,
                           EquipmentSlot.FEET
                   );
-
-                  List<Pair<EquipmentSlot, ItemStack>> equipment =
-                          new ArrayList<>();
-
-                  for (EquipmentSlot slot : slots) {
-                      equipment.add(
-                              Pair.of(
-                                      slot,
-                                      player.getEquippedStack(slot)
-                              )
-                      );
-                  }
-
-                  EntityEquipmentUpdateS2CPacket packet =
-                          new EntityEquipmentUpdateS2CPacket(
-                                  player.getId(),
-                                  equipment
-                          );
-
-                  for (ServerPlayerEntity viewer :
-                          server.getPlayerManager().getPlayerList()) {
-
-                      if (viewer != player) {
-                          viewer.networkHandler.sendPacket(packet);
-                      }
-                  }
               }
           }
           EOF
