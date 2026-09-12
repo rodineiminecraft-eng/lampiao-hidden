@@ -1,4 +1,4 @@
-name: Compilar Lampião Hidden
+name: Compilar Lampiao Hidden
 
 on:
   workflow_dispatch:
@@ -18,4 +18,28 @@ jobs:
           distribution: 'temurin'
 
       - name: Extrair projeto
+        run: |
+          rm -rf projeto
+          mkdir projeto
+          unzip -q lampiao-hidden-1.21.11-completo.zip -d projeto
 
+      - name: Corrigir Fabric Loom
+        run: |
+          cd projeto
+          sed -i "s/id 'fabric-loom-remap'/id 'net.fabricmc.fabric-loom-remap'/" build.gradle
+
+      - name: Instalar Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14'
+
+      - name: Compilar
+        run: |
+          cd projeto
+          gradle build --no-daemon
+
+      - name: Enviar JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: lampiao-hidden
+          path: projeto/build/libs/*.jar
