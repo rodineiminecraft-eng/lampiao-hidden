@@ -1,7 +1,11 @@
-name: Compilar Lampiao Hidden
+name: Compilar Lampião Hidden
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
 
 jobs:
   build:
@@ -11,224 +15,20 @@ jobs:
       - name: Baixar projeto
         uses: actions/checkout@v4
 
-      - name: Instalar Java 21
+      - name: Configurar Java 21
         uses: actions/setup-java@v4
         with:
+          distribution: temurin
           java-version: '21'
-          distribution: 'temurin'
 
-      - name: Extrair projeto
-        run: |
-          rm -rf projeto
-          mkdir projeto
-          unzip -q lampiao-hidden-1.21.11-completo.zip -d projeto
-
-      - name: Corrigir build.gradle
-        run: |
-          cd projeto
-          cat > build.gradle <<'EOF'
-          plugins {
-              id 'net.fabricmc.fabric-loom-remap' version '1.17.13'
-              id 'maven-publish'
-          }
-
-          version = project.mod_version
-          group = project.maven_group
-
-          base {
-              archivesName = project.archives_base_name
-          }
-
-          repositories {
-              maven { url = 'https://maven.fabricmc.net/' }
-              mavenCentral()
-          }
-
-          dependencies {
-              minecraft "com.mojang:minecraft:${project.minecraft_version}"
-              mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-              modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-              modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-          }
-
-          processResources {
-              inputs.property "version", project.version
-              filesMatching("fabric.mod.json") {
-                  expand "version": inputs.properties.version
-              }
-          }
-
-          tasks.withType(JavaCompile).configureEach {
-              options.release = 21
-          }
-
-          java {
-              withSourcesJar()
-              sourceCompatibility = JavaVersion.VERSION_21
-              targetCompatibility = JavaVersion.VERSION_21
-          }
-          EOF
-
-      - name: Corrigir codigo Java
-        run: |
-          cd projeto
-          cat > src/main/java/com/jczzwt/lampiaohidden/LampiaoHidden.java <<'EOF'
-          package com.jczzwt.lampiaohidden;
-
-          import com.mojang.datafixers.util.Pair;
-          import net.fabricmc.api.ModInitializer;
-          import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-          import net.minecraft.component.DataComponentTypes;
-          import net.minecraft.component.type.NbtComponent;
-          import net.minecraft.entity.EquipmentSlot;
-          import net.minecraft.item.ItemStack;
-          import net.minecraft.item.Items;
-          import net.minecraft.network.packet.s2c.play.EntityEquipmentUpdateS2CPacket;
-          import net.minecraft.server.MinecraftServer;
-          import net.minecraft.server.network.ServerPlayerEntity;
-
-          import java.util.ArrayList;
-          import java.util.List;
-          import java.util.UUID;
-          import java.util.HashMap;
-          import java.util.Map;
-
-          public class LampiaoHidden implements ModInitializer {
-
-              private static final String LAMPIAO_KEY = "lampiao_lendario";
-
-              private final Map<UUID, Boolean> states = new HashMap<>();
-
-              @Override
-              public void onInitialize() {
-
-                  ServerTickEvents.END_SERVER_TICK.register(server -> {
-
-                      for (ServerPlayerEntity player :
-                              server.getPlayerManager().getPlayerList()) {
-
-                          boolean active = isLampiao(player);
-                          boolean previous =
-                                  states.getOrDefault(player.getUuid(), false);
-
-                          if (active != previous) {
-
-                              states.put(player.getUuid(), active);
-
-                              if (active) {
-                                  hideFromOthers(server, player);
-                              } else {
-                                  showToOthers(server, player);
-                              }
-                          }
-                      }
-                  });
-              }
-
-              private boolean isLampiao(ServerPlayerEntity player) {
-
-                  return hasLampiao(player.getMainHandStack())
-                          || hasLampiao(player.getOffHandStack());
-              }
-
-              private boolean hasLampiao(ItemStack stack) {
-
-                  if (stack.isEmpty() ||
-                          !stack.isOf(Items.SOUL_LANTERN)) {
-                      return false;
-                  }
-
-                  NbtComponent data =
-                          stack.get(DataComponentTypes.CUSTOM_DATA);
-
-                  if (data == null) {
-                      return false;
-                  }
-
-                  return data.copyNbt()
-                          .getBoolean(LAMPIAO_KEY)
-                          .orElse(false);
-              }
-
-              private void hideFromOthers(
-                      MinecraftServer server,
-                      ServerPlayerEntity player) {
-
-                  List<Pair<EquipmentSlot, ItemStack>> equipment =
-                          new ArrayList<>();
-
-                  for (EquipmentSlot slot : getSlots()) {
-                      equipment.add(Pair.of(slot, ItemStack.EMPTY));
-                  }
-
-                  sendEquipment(server, player, equipment);
-              }
-
-              private void showToOthers(
-                      MinecraftServer server,
-                      ServerPlayerEntity player) {
-
-                  List<Pair<EquipmentSlot, ItemStack>> equipment =
-                          new ArrayList<>();
-
-                  for (EquipmentSlot slot : getSlots()) {
-                      equipment.add(
-                              Pair.of(
-                                      slot,
-                                      player.getEquippedStack(slot).copy()
-                              )
-                      );
-                  }
-
-                  sendEquipment(server, player, equipment);
-              }
-
-              private void sendEquipment(
-                      MinecraftServer server,
-                      ServerPlayerEntity player,
-                      List<Pair<EquipmentSlot, ItemStack>> equipment) {
-
-                  EntityEquipmentUpdateS2CPacket packet =
-                          new EntityEquipmentUpdateS2CPacket(
-                                  player.getId(),
-                                  equipment
-                          );
-
-                  for (ServerPlayerEntity viewer :
-                          server.getPlayerManager().getPlayerList()) {
-
-                      if (viewer != player) {
-                          viewer.networkHandler.sendPacket(packet);
-                      }
-                  }
-              }
-
-              private List<EquipmentSlot> getSlots() {
-
-                  return List.of(
-                          EquipmentSlot.MAINHAND,
-                          EquipmentSlot.OFFHAND,
-                          EquipmentSlot.HEAD,
-                          EquipmentSlot.CHEST,
-                          EquipmentSlot.LEGS,
-                          EquipmentSlot.FEET
-                  );
-              }
-          }
-          EOF
-
-      - name: Instalar Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '9.6.1'
+      - name: Dar permissão ao Gradle
+        run: chmod +x gradlew
 
       - name: Compilar
-        run: |
-          cd projeto
-          gradle clean build --no-daemon
+        run: ./gradlew build
 
-      - name: Disponibilizar JAR
+      - name: Enviar JAR
         uses: actions/upload-artifact@v4
         with:
           name: lampiao-hidden
-          path: projeto/build/libs/*.jar
+          path: build/libs/*.jar
