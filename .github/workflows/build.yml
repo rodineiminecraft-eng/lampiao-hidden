@@ -18,22 +18,3 @@ jobs:
           distribution: 'temurin'
 
       - name: Extrair projeto
-        run: |
-          mkdir projeto
-          unzip lampiao-hidden-1.21.11-completo.zip -d projeto
-
-      - name: Instalar Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.14'
-
-      - name: Compilar
-        run: |
-          cd projeto
-          gradle build --no-daemon
-
-      - name: Disponibilizar JAR
-        uses: actions/upload-artifact@v4
-        with:
-          name: lampiao-hidden
-          path: projeto/build/libs/*.jar
